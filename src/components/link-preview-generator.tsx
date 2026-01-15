@@ -1,0 +1,400 @@
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Copy, Check, Upload, X } from "lucide-react";
+import { toast } from "sonner";
+import { CardPreview, TwitterPreview, WhatsAppPreview, GooglePreview } from "@/components/previews";
+import { Spinner } from "./ui/spinner";
+import { Field, FieldContent, FieldDescription, FieldLabel } from "./ui/field";
+
+interface LinkMetadata {
+    title: string;
+    description: string;
+    image: string;
+    url: string;
+    domain: string;
+    favicon: string;
+}
+
+const defaultMetadata: LinkMetadata = {
+    title: "Link Preview Generator",
+    description: "Generate click-worthy link previews for social media and search engines.",
+    image: "",
+    url: "https://example.com",
+    domain: "example.com",
+    favicon: "",
+};
+
+export function LinkPreviewGenerator() {
+    const [url, setUrl] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [metadata, setMetadata] = useState<LinkMetadata>(defaultMetadata);
+    const [hasFetched, setHasFetched] = useState(false);
+    const [customTitle, setCustomTitle] = useState("");
+    const [customDescription, setCustomDescription] = useState("");
+    const [customImage, setCustomImage] = useState("");
+    const [copied, setCopied] = useState(false);
+    const [useCorsProxy, setUseCorsProxy] = useState(true);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Use custom values if set, otherwise use fetched metadata
+    const displayMetadata = {
+        ...metadata,
+        title: customTitle || metadata.title,
+        description: customDescription || metadata.description,
+        image: customImage || metadata.image,
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (!file.type.startsWith('image/')) {
+                toast.error("Please select an image file");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setCustomImage(event.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const clearCustomImage = () => {
+        setCustomImage("");
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
+
+    const generatePreview = async () => {
+        if (!url) return;
+        setLoading(true);
+        try {
+            // Use a CORS proxy to fetch the HTML content (if enabled)
+            const fetchUrl = useCorsProxy
+                ? `https://corsproxy.io/?${encodeURIComponent(url)}`
+                : url;
+            const response = await fetch(fetchUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+            }
+            
+            const html = await response.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+
+            const getMetaContent = (name: string) => {
+                return doc.querySelector(`meta[property="${name}"]`)?.getAttribute("content") ||
+                    doc.querySelector(`meta[name="${name}"]`)?.getAttribute("content") || "";
+            };
+
+            const title = getMetaContent("og:title") || doc.title || "";
+            const description = getMetaContent("og:description") || getMetaContent("description") || "";
+            const image = getMetaContent("og:image") || "";
+            const domain = new URL(url).hostname;
+
+            // Get favicon
+            const faviconLink = doc.querySelector('link[rel="icon"]')?.getAttribute("href") ||
+                doc.querySelector('link[rel="shortcut icon"]')?.getAttribute("href") ||
+                doc.querySelector('link[rel*="icon"]')?.getAttribute("href");
+
+            let favicon = "";
+            if (faviconLink) {
+                // Handle relative URLs
+                if (faviconLink.startsWith("http")) {
+                    favicon = faviconLink;
+                } else if (faviconLink.startsWith("//")) {
+                    favicon = `https:${faviconLink}`;
+                } else if (faviconLink.startsWith("/")) {
+                    favicon = `${new URL(url).origin}${faviconLink}`;
+                } else {
+                    favicon = `${new URL(url).origin}/${faviconLink}`;
+                }
+            } else {
+                // Fallback to default favicon location
+                favicon = `${new URL(url).origin}/favicon.ico`;
+            }
+
+            setMetadata({
+                title,
+                description,
+                image,
+                url,
+                domain,
+                favicon
+            });
+
+            // Reset custom values when fetching new URL
+            setCustomTitle("");
+            setCustomDescription("");
+            setCustomImage("");
+            setHasFetched(true);
+        } catch (error) {
+            console.error("Failed to fetch link metadata:", error);
+            toast.error("Failed to fetch link metadata. Please check the URL and try again.");
+            setHasFetched(false);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const copyMetaTags = () => {
+        const metaTags = `<!-- Primary Meta Tags -->
+<title>${displayMetadata.title}</title>
+<meta name="title" content="${displayMetadata.title}" />
+<meta name="description" content="${displayMetadata.description}" />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="${displayMetadata.url}" />
+<meta property="og:title" content="${displayMetadata.title}" />
+<meta property="og:description" content="${displayMetadata.description}" />
+<meta property="og:image" content="${displayMetadata.image}" />
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:url" content="${displayMetadata.url}" />
+<meta property="twitter:title" content="${displayMetadata.title}" />
+<meta property="twitter:description" content="${displayMetadata.description}" />
+<meta property="twitter:image" content="${displayMetadata.image}" />`;
+
+        navigator.clipboard.writeText(metaTags);
+        setCopied(true);
+        toast.success("Meta tags copied to clipboard!");
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 font-sans relative overflow-hidden">
+            {/* Blurred gradient background orbs */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {/* Top left purple/indigo blob */}
+                <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/20 dark:bg-indigo-500/30 rounded-full blur-3xl" />
+                {/* Top right blue blob */}
+                <div className="absolute -top-20 right-0 w-80 h-80 bg-blue-500/15 dark:bg-blue-600/20 rounded-full blur-3xl" />
+                {/* Center purple blob */}
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-150 h-150 bg-violet-500/10 dark:bg-violet-500/15 rounded-full blur-3xl" />
+                {/* Bottom left magenta/pink blob */}
+                <div className="absolute bottom-0 left-1/4 w-72 h-72 bg-fuchsia-500/15 dark:bg-fuchsia-500/20 rounded-full blur-3xl" />
+                {/* Bottom right purple blob */}
+                <div className="absolute -bottom-20 right-1/4 w-96 h-96 bg-purple-500/15 dark:bg-purple-600/25 rounded-full blur-3xl" />
+            </div>
+            
+            <div className="max-w-6xl mx-auto space-y-8 relative z-10">
+
+                {/* Header */}
+                <div className="text-center space-y-4">
+                    <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Link preview generator</div>
+                    <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
+                        Generate click-worthy link <br className="hidden md:block" /> previews
+                    </h1>
+                    <p className="max-w-2xl mx-auto text-muted-foreground">
+                        Check how your link looks on Google & social platforms. Customize ordinary link previews
+                        into eye-catching ones that leave a lasting impression before they're clicked.
+                    </p>
+                </div>
+
+                {/* content */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+
+                    {/* Left Column: Input */}
+                    <Card className="p-6 shadow-sm">
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-semibold">URL Details</h2>
+                                <ThemeToggle />
+                            </div>
+
+                            <Field>
+                                <FieldContent>
+                                    <FieldLabel htmlFor="url">
+                                        Website URL <span className="text-red-500">*</span>
+                                    </FieldLabel>
+                                    <FieldDescription>
+                                        Insert your website full URL (e.g https://www.example.com)
+                                    </FieldDescription>
+                                </FieldContent>
+                                <Input
+                                    id="url"
+                                    placeholder="https://www.example.com"
+                                    value={url}
+                                    onChange={(e) => setUrl(e.target.value)}
+                                    className="h-12"
+                                />
+                            </Field>
+
+                            <Field orientation="horizontal">
+                                <FieldContent>
+                                    <FieldLabel htmlFor="cors-proxy">Use CORS Proxy</FieldLabel>
+                                    <FieldDescription>Disable if fetching from same origin</FieldDescription>
+                                </FieldContent>
+                                <Switch
+                                    id="cors-proxy"
+                                    checked={useCorsProxy}
+                                    onCheckedChange={setUseCorsProxy}
+                                />
+                            </Field>
+
+                            <Button
+                                onClick={generatePreview}
+                                disabled={loading}
+                                className="w-full h-12 text-base font-semibold"
+                            >
+                                {loading && <Spinner />}
+                                Generate Link Preview
+                            </Button>
+
+                            {/* Custom Fields - shown after fetching */}
+                            {hasFetched && (
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h3 className="text-sm font-semibold text-muted-foreground">Customize Preview</h3>
+
+                                    <Field>
+                                        <FieldContent>
+                                            <FieldLabel htmlFor="customTitle">
+                                                Custom Title (optional)
+                                            </FieldLabel>
+                                        </FieldContent>
+                                        <Input
+                                            id="customTitle"
+                                            placeholder={metadata.title}
+                                            value={customTitle}
+                                            onChange={(e) => setCustomTitle(e.target.value)}
+                                        />
+                                    </Field>
+
+                                    <Field>
+                                        <FieldContent>
+                                            <FieldLabel htmlFor="customDescription" className="text-sm font-medium">
+                                                Custom Description (optional)
+                                            </FieldLabel>
+                                        </FieldContent>
+                                        <Textarea
+                                            id="customDescription"
+                                            placeholder={metadata.description}
+                                            value={customDescription}
+                                            onChange={(e) => setCustomDescription(e.target.value)}
+                                            rows={3}
+                                        />
+                                    </Field>
+
+                                    <Field>
+                                        <FieldContent>
+                                            <FieldLabel htmlFor="customImage" className="text-sm font-medium">
+                                                Custom Image (optional)
+                                            </FieldLabel>
+                                        </FieldContent>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageUpload}
+                                            className="hidden"
+                                            id="customImage"
+                                        />
+                                        {customImage ? (
+                                            <div className="relative">
+                                                <img
+                                                    src={customImage}
+                                                    alt="Custom preview"
+                                                    className="w-full h-32 object-cover rounded-lg border"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    size="icon"
+                                                    className="absolute top-2 right-2"
+                                                    onClick={clearCustomImage}
+                                                >
+                                                    <X />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="lg"
+                                                className="w-full"
+                                                onClick={() => fileInputRef.current?.click()}
+                                            >
+                                                <Upload />
+                                                Upload Image
+                                            </Button>
+                                        )}
+                                    </Field>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+
+                    {/* Right Column: Output */}
+                    <Card className="p-6 shadow-sm min-h-100">
+                        <div className="space-y-6">
+                            <h2 className="text-lg font-semibold">Output</h2>
+
+                            <Tabs defaultValue="card" className="w-full">
+                                <TabsList className="grid w-full grid-cols-4 mb-6">
+                                    <TabsTrigger value="card">Card</TabsTrigger>
+                                    <TabsTrigger value="twitter">Twitter</TabsTrigger>
+                                    <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+                                    <TabsTrigger value="google">Google</TabsTrigger>
+                                </TabsList>
+
+                                <div className="flex items-center justify-center min-h-75 bg-muted/20 rounded-lg p-4 border border-border">
+
+                                    {/* Default Card Preview */}
+                                    <TabsContent value="card" className="w-full max-w-md mt-0">
+                                        <CardPreview {...displayMetadata} favicon={metadata.favicon} />
+                                    </TabsContent>
+
+                                    {/* Twitter Preview */}
+                                    <TabsContent value="twitter" className="w-full max-w-md mt-0">
+                                        <TwitterPreview {...displayMetadata} favicon={metadata.favicon} />
+                                    </TabsContent>
+
+                                    {/* WhatsApp Preview */}
+                                    <TabsContent value="whatsapp" className="w-full max-w-sm mt-0">
+                                        <WhatsAppPreview {...displayMetadata} favicon={metadata.favicon} />
+                                    </TabsContent>
+
+                                    {/* Google Preview */}
+                                    <TabsContent value="google" className="w-full max-w-xl mt-0 px-4">
+                                        <GooglePreview {...displayMetadata} favicon={metadata.favicon} />
+                                    </TabsContent>
+
+                                </div>
+
+                                {/* Copy Meta Tags Button */}
+                                <Button
+                                    onClick={copyMetaTags}
+                                    className="w-fit mx-auto mt-4"
+                                >
+                                    {copied ? (
+                                        <>
+                                            <Check className="mr-2 h-4 w-4" />
+                                            Copied!
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Copy className="mr-2 h-4 w-4" />
+                                            Copy Meta Tags
+                                        </>
+                                    )}
+                                </Button>
+                            </Tabs>
+                        </div>
+                    </Card>
+
+                </div>
+            </div>
+        </div>
+    );
+}

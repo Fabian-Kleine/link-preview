@@ -1,7 +1,13 @@
-import { ComponentExample } from "@/components/component-example";
+import { LinkPreviewGenerator } from "@/components/link-preview-generator";
+import { Toaster } from "./components/ui/sonner";
 
 export function App() {
-return <ComponentExample />;
+  return (
+    <>
+      <LinkPreviewGenerator />
+      <Toaster richColors />
+    </>
+  );
 }
 
 export default App;
