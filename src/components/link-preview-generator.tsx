@@ -6,7 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Copy, Check, Upload, X } from "lucide-react";
+import { Copy, Check, Upload, X, Download } from "lucide-react";
+import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { CardPreview, TwitterPreview, WhatsAppPreview, GooglePreview } from "@/components/previews";
 import { Spinner } from "./ui/spinner";
@@ -40,7 +41,9 @@ export function LinkPreviewGenerator() {
     const [customImage, setCustomImage] = useState("");
     const [copied, setCopied] = useState(false);
     const [useCorsProxy, setUseCorsProxy] = useState(true);
+    const [downloading, setDownloading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const previewRef = useRef<HTMLDivElement>(null);
 
     // Use custom values if set, otherwise use fetched metadata
     const displayMetadata = {
@@ -81,11 +84,11 @@ export function LinkPreviewGenerator() {
                 ? `https://corsproxy.io/?${encodeURIComponent(url)}`
                 : url;
             const response = await fetch(fetchUrl);
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
             }
-            
+
             const html = await response.text();
 
             const parser = new DOMParser();
@@ -172,6 +175,58 @@ export function LinkPreviewGenerator() {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const downloadImage = async () => {
+        if (!previewRef.current) return;
+
+        setDownloading(true);
+        try {
+            // Convert external images to data URLs to avoid CORS issues
+            const images = previewRef.current.querySelectorAll("img");
+            const originalSrcs: { img: HTMLImageElement; src: string }[] = [];
+
+            for (const img of images) {
+                if (img.src && img.src.startsWith("http") && !img.src.startsWith(window.location.origin) && !img.src.includes("localhost")) {
+                    try {
+                        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(img.src)}`;
+                        const response = await fetch(proxyUrl);
+                        const blob = await response.blob();
+                        const dataUrl = await new Promise<string>((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result as string);
+                            reader.readAsDataURL(blob);
+                        });
+                        originalSrcs.push({ img, src: img.src });
+                        img.src = dataUrl;
+                    } catch {
+                        // If proxy fails, continue without converting
+                        console.warn("Could not convert image:", img.src);
+                    }
+                }
+            }
+
+            const dataUrl = await toPng(previewRef.current, {
+                pixelRatio: 2,
+                cacheBust: true,
+            });
+
+            // Restore original image sources
+            for (const { img, src } of originalSrcs) {
+                img.src = src;
+            }
+
+            const link = document.createElement("a");
+            link.download = `link-preview-${displayMetadata.domain || "image"}.png`;
+            link.href = dataUrl;
+            link.click();
+            toast.success("Image downloaded!");
+        } catch (error) {
+            console.error("Failed to download image:", error);
+            toast.error("Failed to download image. Please try again.");
+        } finally {
+            setDownloading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 font-sans relative overflow-hidden">
             {/* Blurred gradient background orbs */}
@@ -187,7 +242,7 @@ export function LinkPreviewGenerator() {
                 {/* Bottom right purple blob */}
                 <div className="absolute -bottom-20 right-1/4 w-96 h-96 bg-purple-500/15 dark:bg-purple-600/25 rounded-full blur-3xl" />
             </div>
-            
+
             <div className="max-w-6xl mx-auto space-y-8 relative z-10">
 
                 {/* Header */}
@@ -348,7 +403,7 @@ export function LinkPreviewGenerator() {
                                     <TabsTrigger value="google">Google</TabsTrigger>
                                 </TabsList>
 
-                                <div className="flex items-center justify-center min-h-75 bg-muted/20 rounded-lg p-4 border border-border">
+                                <div ref={previewRef} className="flex items-center justify-center min-h-75 bg-muted/20 rounded-lg p-4 border border-border">
 
                                     {/* Default Card Preview */}
                                     <TabsContent value="card" className="w-full max-w-md mt-0">
@@ -372,23 +427,32 @@ export function LinkPreviewGenerator() {
 
                                 </div>
 
-                                {/* Copy Meta Tags Button */}
-                                <Button
-                                    onClick={copyMetaTags}
-                                    className="w-fit mx-auto mt-4"
-                                >
-                                    {copied ? (
-                                        <>
-                                            <Check className="mr-2 h-4 w-4" />
-                                            Copied!
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Copy className="mr-2 h-4 w-4" />
-                                            Copy Meta Tags
-                                        </>
-                                    )}
-                                </Button>
+                                {/* Action Buttons */}
+                                <div className="flex items-center justify-center gap-2 mt-4">
+                                    <Button
+                                        onClick={downloadImage}
+                                        disabled={downloading}
+                                    >
+                                        <Download />
+                                        {downloading ? "Downloading..." : "Download Image"}
+                                    </Button>
+                                    <Button
+                                        onClick={copyMetaTags}
+                                        variant="outline"
+                                    >
+                                        {copied ? (
+                                            <>
+                                                <Check />
+                                                Copied!
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Copy />
+                                                Copy Meta Tags
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </Tabs>
                         </div>
                     </Card>
