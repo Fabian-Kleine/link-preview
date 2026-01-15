@@ -1,12 +1,12 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Copy, Check, Upload, X, Download } from "lucide-react";
+import { Copy, Check, Upload, X, Download, ArrowRight } from "lucide-react";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { CardPreview, TwitterPreview, WhatsAppPreview, GooglePreview } from "@/components/previews";
@@ -247,6 +247,17 @@ export function LinkPreviewGenerator() {
 
                 {/* Header */}
                 <div className="text-center space-y-4">
+                    <Button
+                            asChild
+                            size="lg"
+                            variant="outline"
+                            className="bg-transparent px-3 py-1 h-min text-sm font-medium ring-1 ring-black/10 hover:ring-black/20 dark:ring-white/10 dark:hover:ring-white/20 transition-all"
+                        >
+                            <a href="https://github.com/Fabian-Kleine/link-preview" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
+                                View on GitHub
+                                <ArrowRight />
+                            </a>
+                        </Button>
                     <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Link preview generator</div>
                     <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
                         Generate click-worthy link <br className="hidden md:block" /> previews
@@ -262,12 +273,13 @@ export function LinkPreviewGenerator() {
 
                     {/* Left Column: Input */}
                     <Card className="p-6 shadow-sm">
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold">URL Details</h2>
+                        <CardHeader className="px-0">
+                            <CardTitle className="text-lg font-semibold">URL Details</CardTitle>
+                            <CardAction>
                                 <ThemeToggle />
-                            </div>
-
+                            </CardAction>
+                        </CardHeader>
+                        <CardContent className="space-y-6 px-0">
                             <Field>
                                 <FieldContent>
                                     <FieldLabel htmlFor="url">
@@ -301,7 +313,7 @@ export function LinkPreviewGenerator() {
                             <Button
                                 onClick={generatePreview}
                                 disabled={loading}
-                                className="w-full h-12 text-base font-semibold"
+                                className="w-full text-base font-semibold"
                             >
                                 {loading && <Spinner />}
                                 Generate Link Preview
@@ -387,14 +399,15 @@ export function LinkPreviewGenerator() {
                                     </Field>
                                 </div>
                             )}
-                        </div>
+                        </CardContent>
                     </Card>
 
                     {/* Right Column: Output */}
                     <Card className="p-6 shadow-sm min-h-100">
-                        <div className="space-y-6">
-                            <h2 className="text-lg font-semibold">Output</h2>
-
+                        <CardHeader className="px-0">
+                            <CardTitle className="text-lg font-semibold">Output</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6 px-0">
                             <Tabs defaultValue="card" className="w-full">
                                 <TabsList className="grid w-full grid-cols-4 mb-6">
                                     <TabsTrigger value="card">Card</TabsTrigger>
@@ -454,9 +467,8 @@ export function LinkPreviewGenerator() {
                                     </Button>
                                 </div>
                             </Tabs>
-                        </div>
+                        </CardContent>
                     </Card>
-
                 </div>
             </div>
         </div>
