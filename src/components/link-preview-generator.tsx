@@ -114,7 +114,13 @@ export function LinkPreviewGenerator() {
                 return;
             }
             
-            const response = await fetch(fetchUrl);
+            const response = await fetch(fetchUrl, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "text/html",
+                    "Access-Control-Allow-Origin": "*",
+                }
+            });
 
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
