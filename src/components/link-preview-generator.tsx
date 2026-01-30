@@ -41,6 +41,7 @@ export function LinkPreviewGenerator() {
     const [customImage, setCustomImage] = useState("");
     const [copied, setCopied] = useState(false);
     const [useCorsProxy, setUseCorsProxy] = useState(true);
+    const [useServerFetch, setUseServerFetch] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const previewRef = useRef<HTMLDivElement>(null);
@@ -83,6 +84,36 @@ export function LinkPreviewGenerator() {
             const fetchUrl = useCorsProxy
                 ? `https://corsproxy.io/?${encodeURIComponent(url)}`
                 : url;
+
+            if (useServerFetch) {
+                const serverResponse = await fetch(`https://proxy.fabian-kleine.dev/api/metadata?url=${encodeURIComponent(fetchUrl)}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                });
+
+                if (!serverResponse.ok) {
+                    throw new Error(`Server error ${serverResponse.status}: ${serverResponse.statusText}`);
+                }
+
+                const serverData = await serverResponse.json();
+                setMetadata({
+                    title: serverData.title || "",
+                    description: serverData.description || "",
+                    image: serverData.image || "",
+                    url,
+                    domain: serverData.domain || new URL(url).hostname,
+                    favicon: serverData.favicon || `${new URL(url).origin}/favicon.ico`,
+                });
+                setHasFetched(true);
+                setCustomTitle("");
+                setCustomDescription("");
+                setCustomImage("");
+                return;
+            }
+            
             const response = await fetch(fetchUrl);
 
             if (!response.ok) {
@@ -307,6 +338,18 @@ export function LinkPreviewGenerator() {
                                     id="cors-proxy"
                                     checked={useCorsProxy}
                                     onCheckedChange={setUseCorsProxy}
+                                />
+                            </Field>
+
+                            <Field orientation="horizontal">
+                                <FieldContent>
+                                    <FieldLabel htmlFor="server-fetch">Use Server Fetch</FieldLabel>
+                                    <FieldDescription>Enable to fetch metadata via server (avoids CORS issues)</FieldDescription>
+                                </FieldContent>
+                                <Switch
+                                    id="server-fetch"
+                                    checked={useServerFetch}
+                                    onCheckedChange={setUseServerFetch}
                                 />
                             </Field>
 
