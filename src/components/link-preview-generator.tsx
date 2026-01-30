@@ -41,7 +41,6 @@ export function LinkPreviewGenerator() {
     const [customImage, setCustomImage] = useState("");
     const [copied, setCopied] = useState(false);
     const [useCorsProxy, setUseCorsProxy] = useState(true);
-    const [useServerFetch, setUseServerFetch] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const previewRef = useRef<HTMLDivElement>(null);
@@ -80,13 +79,8 @@ export function LinkPreviewGenerator() {
         if (!url) return;
         setLoading(true);
         try {
-            // Use a CORS proxy to fetch the HTML content (if enabled)
-            const fetchUrl = useCorsProxy
-                ? `https://corsproxy.io/?${encodeURIComponent(url)}`
-                : url;
-
-            if (useServerFetch) {
-                const serverResponse = await fetch(`https://proxy.fabian-kleine.dev/api/metadata?url=${encodeURIComponent(fetchUrl)}`, {
+            if (useCorsProxy) {
+                const serverResponse = await fetch(`https://proxy.fabian-kleine.dev/api/metadata?url=${encodeURIComponent(url)}`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -114,7 +108,7 @@ export function LinkPreviewGenerator() {
                 return;
             }
             
-            const response = await fetch(fetchUrl, {
+            const response = await fetch(url, {
                 method: "GET",
                 headers: {
                     "Content-Type": "text/html",
@@ -344,18 +338,6 @@ export function LinkPreviewGenerator() {
                                     id="cors-proxy"
                                     checked={useCorsProxy}
                                     onCheckedChange={setUseCorsProxy}
-                                />
-                            </Field>
-
-                            <Field orientation="horizontal">
-                                <FieldContent>
-                                    <FieldLabel htmlFor="server-fetch">Use Server Fetch</FieldLabel>
-                                    <FieldDescription>Enable to fetch metadata via server (avoids CORS issues)</FieldDescription>
-                                </FieldContent>
-                                <Switch
-                                    id="server-fetch"
-                                    checked={useServerFetch}
-                                    onCheckedChange={setUseServerFetch}
                                 />
                             </Field>
 
